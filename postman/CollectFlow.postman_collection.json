@@ -1,0 +1,10 @@
+{
+  "info": {"name": "CollectFlow EMI API", "_postman_id": "5e7b2970-2d5a-4c67-a8a1-collectflowdemo", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+  "variable": [{"key": "baseUrl", "value": "http://localhost:8000"}, {"key": "webhookApiKey", "value": "change-me"}, {"key": "callId", "value": ""}],
+  "item": [
+    {"name": "Create call", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "url": "{{baseUrl}}/api/Initial_Message", "body": {"mode": "raw", "raw": "{\"customer_id\":\"CUS-1042\",\"customer_name\":\"Maya Rivera\",\"phone\":\"+14155550184\",\"language\":\"en\",\"emi_amount\":18450,\"currency\":\"INR\",\"due_date\":\"2026-08-05\",\"loan_account\":\"LN-84021\"}"}}},
+    {"name": "Post-call webhook", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Webhook-API-Key", "value": "{{webhookApiKey}}"}, {"key": "X-Webhook-Id", "value": "evt_demo_001"}], "url": "{{baseUrl}}/api/v1/webhooks/post-call", "body": {"mode": "raw", "raw": "{\"call_id\":\"{{callId}}\",\"DISPOSITION\":\"PROMISE_TO_PAY\",\"transcript\":[{\"speaker\":\"agent\",\"text\":\"Hello, I am calling about your EMI.\",\"timestamp_ms\":0}],\"analytics\":{\"summary\":\"Promised to pay Friday.\",\"sentiment\":\"positive\",\"duration_seconds\":52}}"}}},
+    {"name": "List calls", "request": {"method": "GET", "url": "{{baseUrl}}/api/calls?limit=20"}},
+    {"name": "Summary", "request": {"method": "GET", "url": "{{baseUrl}}/api/dashboard/summary"}}
+  ]
+}
