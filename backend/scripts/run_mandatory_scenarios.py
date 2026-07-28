@@ -9,10 +9,9 @@ Usage:
 import argparse
 import json
 import os
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.error import HTTPError
-from urllib.request import Request, urlopen
 
 
 SCENARIOS = [
@@ -105,14 +104,35 @@ SCENARIOS = [
 
 
 def send(base_url, method, path, payload=None, headers=None):
-    body = json.dumps(payload).encode() if payload is not None else None
-    request_headers = {"Content-Type": "application/json", **(headers or {})}
-    request = Request(f"{base_url.rstrip('/')}{path}", data=body, headers=request_headers, method=method)
+    command = [
+        "curl",
+        "--silent",
+        "--show-error",
+        "--retry",
+        "3",
+        "--retry-delay",
+        "1",
+        "--connect-timeout",
+        "15",
+        "--request",
+        method,
+        "--header",
+        "Content-Type: application/json",
+        "--write-out",
+        "\n%{http_code}",
+    ]
+    for key, value in (headers or {}).items():
+        command.extend(["--header", f"{key}: {value}"])
+    if payload is not None:
+        command.extend(["--data", json.dumps(payload, ensure_ascii=False)])
+    command.append(f"{base_url.rstrip('/')}{path}")
+    completed = subprocess.run(command, check=True, capture_output=True, text=True)
+    response_body, status = completed.stdout.rsplit("\n", 1)
     try:
-        with urlopen(request, timeout=30) as response:
-            return response.status, json.loads(response.read().decode())
-    except HTTPError as exc:
-        return exc.code, json.loads(exc.read().decode())
+        parsed_body = json.loads(response_body)
+    except json.JSONDecodeError:
+        parsed_body = {"raw_response": response_body}
+    return int(status), parsed_body
 
 
 def main():

@@ -10,6 +10,7 @@ from decimal import Decimal
 from bson.decimal128 import Decimal128
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -82,7 +83,15 @@ async def validation_error(request: Request, exc: RequestValidationError):
     )
     return JSONResponse(
         status_code=422,
-        content={"error": {"code": "VALIDATION_ERROR", "message": "Request validation failed", "details": exc.errors()}},
+        content=jsonable_encoder(
+            {
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "Request validation failed",
+                    "details": exc.errors(),
+                }
+            }
+        ),
     )
 
 
