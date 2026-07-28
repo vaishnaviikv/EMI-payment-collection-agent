@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from .config import Settings, get_settings
+from .config import get_settings
 from .logging import configure_logging
 from .models import CallCreated, CallView, InitialMessageRequest, PostCallWebhook
 from .repository import CallRepository, utcnow
@@ -74,7 +74,12 @@ async def request_context(request: Request, call_next):
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_error(_: Request, exc: RequestValidationError):
+async def validation_error(request: Request, exc: RequestValidationError):
+    body = await request.body()
+    logger.warning(
+        "request_validation_failed",
+        extra={"path": request.url.path, "body": body.decode("utf-8", errors="replace")[:2000]},
+    )
     return JSONResponse(
         status_code=422,
         content={"error": {"code": "VALIDATION_ERROR", "message": "Request validation failed", "details": exc.errors()}},
