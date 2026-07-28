@@ -24,18 +24,6 @@ class CallRepository:
     async def create(self, document: dict):
         await self.collection.insert_one(document)
 
-    async def update_trigger(self, call_id: str, provider_call_id: str):
-        await self.collection.update_one(
-            {"call_id": call_id},
-            {"$set": {"provider_call_id": provider_call_id, "status": "triggered", "updated_at": utcnow()}},
-        )
-
-    async def mark_trigger_failed(self, call_id: str, reason: str):
-        await self.collection.update_one(
-            {"call_id": call_id},
-            {"$set": {"status": "trigger_failed", "trigger_error": reason, "updated_at": utcnow()}},
-        )
-
     async def apply_webhook(self, call_id: str, delivery_id: str, update: dict):
         return await self.collection.find_one_and_update(
             {"call_id": call_id, "webhook_ids": {"$ne": delivery_id}},

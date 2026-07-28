@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowUpRight, CalendarDays, ChevronRight, CircleDollarSign, Clock3, Headphones, PhoneCall, Search, ShieldCheck, Sparkles, TrendingUp, Users } from "lucide-react";
-import { createCall, getDashboard } from "./api";
-import type { NewCallPayload } from "./api";
+import { getDashboard } from "./api";
 import type { Call, Summary } from "./types";
 
 const labels: Record<string, string> = {
@@ -27,33 +26,6 @@ function Logo() {
 
 function StagePill({ stage }: { stage: string }) {
   return <span className={`pill ${stage}`}><i />{labels[stage] || stage.replaceAll("_", " ")}</span>;
-}
-
-const emptyCall: NewCallPayload = { customer_id: "", customer_name: "", phone: "", language: "en", emi_amount: 0, currency: "USD", due_date: "", loan_account: "" };
-
-function NewCallDialog({ onClose, onCreated }: { onClose: () => Promise<void>; onCreated: () => Promise<void> }) {
-  const [form, setForm] = useState<NewCallPayload>(emptyCall);
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const update = <K extends keyof NewCallPayload>(key: K, value: NewCallPayload[K]) => setForm((current) => ({ ...current, [key]: value }));
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault(); setError("");
-    if (!form.customer_id || !form.customer_name || !form.due_date || !form.loan_account || form.emi_amount <= 0) return setError("Complete every field with a valid EMI amount.");
-    if (!/^\+[1-9]\d{7,14}$/.test(form.phone)) return setError("Use an international phone format, such as +14155550123.");
-    setSubmitting(true);
-    try { await createCall(form); await onCreated(); await onClose(); }
-    catch (err) { setError(err instanceof Error ? err.message : "The call could not be initiated."); }
-    finally { setSubmitting(false); }
-  };
-  return <div className="modal-backdrop" onMouseDown={() => void onClose()}><section className="call-dialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
-    <button className="modal-close" onClick={() => void onClose()} aria-label="Close">×</button><div className="eyebrow">CALL INITIATION</div><h2>Start a collection call</h2><p>FastAPI validates the request, saves a pending record, and then triggers the Gnani agent.</p>
-    <form onSubmit={submit}><div className="form-grid">
-      <label>Customer name<input value={form.customer_name} onChange={(e) => update("customer_name", e.target.value)} /></label><label>Customer ID<input value={form.customer_id} onChange={(e) => update("customer_id", e.target.value)} placeholder="cust001" /></label>
-      <label>Phone number<input value={form.phone} onChange={(e) => update("phone", e.target.value)} placeholder="+14155550123" /></label><label>Language<select value={form.language} onChange={(e) => update("language", e.target.value as "en" | "es")}><option value="en">English</option><option value="es">Spanish</option></select></label>
-      <label>EMI amount<input type="number" min="0.01" step="0.01" value={form.emi_amount || ""} onChange={(e) => update("emi_amount", Number(e.target.value))} /></label><label>Due date<input type="date" value={form.due_date} onChange={(e) => update("due_date", e.target.value)} /></label>
-      <label className="full">Loan account reference<input value={form.loan_account} onChange={(e) => update("loan_account", e.target.value)} placeholder="Use a demo or masked reference" /></label>
-    </div>{error && <div className="form-error">{error}</div>}<div className="form-actions"><button type="button" className="secondary" onClick={() => void onClose()}>Cancel</button><button type="submit" disabled={submitting}>{submitting ? "Starting…" : "Start call"}</button></div></form>
-  </section></div>;
 }
 
 function Detail({ call, onBack }: { call: Call; onBack: () => void }) {
@@ -98,7 +70,6 @@ function Dashboard() {
   const [stage, setStage] = useState("all");
   const [selected, setSelected] = useState<Call | null>(null);
   const [view, setView] = useState<"overview" | "calls" | "schedules">("overview");
-  const [newCallOpen, setNewCallOpen] = useState(false);
 
   const refreshDashboard = async () => {
     try {
@@ -129,9 +100,9 @@ function Dashboard() {
   const showSchedules = view === "schedules";
 
   return <div className="shell">
-    <aside><Logo /><nav><a className={view === "overview" ? "active" : ""} onClick={() => setView("overview")}><span className="nav-square"><TrendingUp size={17}/></span>Overview</a><a className={showCalls ? "active" : ""} onClick={() => setView("calls")}><span className="nav-square"><PhoneCall size={17}/></span>All calls</a><a className={showSchedules ? "active" : ""} onClick={() => setView("schedules")}><span className="nav-square"><CalendarDays size={17}/></span>Schedules</a></nav><div className="aside-bottom"><div className="agent-card"><span className="pulse"/><div><strong>Gnani agent</strong><small>Mock mode active</small></div></div><div className="profile"><div className="profile-avatar">VV</div><div><strong>Vaishnavi V</strong><small>Collections ops</small></div></div></div></aside>
+    <aside><Logo /><nav><a className={view === "overview" ? "active" : ""} onClick={() => setView("overview")}><span className="nav-square"><TrendingUp size={17}/></span>Overview</a><a className={showCalls ? "active" : ""} onClick={() => setView("calls")}><span className="nav-square"><PhoneCall size={17}/></span>All calls</a><a className={showSchedules ? "active" : ""} onClick={() => setView("schedules")}><span className="nav-square"><CalendarDays size={17}/></span>Schedules</a></nav><div className="aside-bottom"><div className="agent-card"><span className="pulse"/><div><strong>Gnani agent</strong><small>Triggered from Agents Console</small></div></div><div className="profile"><div className="profile-avatar">VV</div><div><strong>Vaishnavi V</strong><small>Collections ops</small></div></div></div></aside>
     <main>
-      <header><div><div className="eyebrow">{showSchedules ? "PAYMENT & CALLBACK SCHEDULES" : showCalls ? "ALL COLLECTION CALLS" : "COLLECTIONS OVERVIEW"}</div><h1>{showSchedules ? "Upcoming commitments" : showCalls ? "All calls" : "Good Morning Vaishnavi V"}</h1><p>{showSchedules ? "Track promised payments and requested callbacks." : showCalls ? "Search and review every collection conversation." : "Here’s how your EMI portfolio is moving today."}</p></div><div className="header-actions"><span className="date"><CalendarDays size={16}/>Jul 26, 2026</span><button onClick={() => setNewCallOpen(true)}><PhoneCall size={16}/>New call</button></div></header>
+      <header><div><div className="eyebrow">{showSchedules ? "PAYMENT & CALLBACK SCHEDULES" : showCalls ? "ALL COLLECTION CALLS" : "COLLECTIONS OVERVIEW"}</div><h1>{showSchedules ? "Upcoming commitments" : showCalls ? "All calls" : "Good Morning Vaishnavi V"}</h1><p>{showSchedules ? "Track promised payments and requested callbacks." : showCalls ? "Search and review every collection conversation." : "Here’s how your EMI portfolio is moving today."}</p></div><div className="header-actions"><span className="date"><CalendarDays size={16}/>Jul 26, 2026</span></div></header>
       {demoMode && <div className="demo-banner"><Sparkles size={16}/><span>Demo data</span> — sample records keep every view useful until the Atlas-backed API is connected.</div>}
       {loadError && <div className="demo-banner"><Sparkles size={16}/><span>Backend unavailable</span> — {loadError}</div>}
       {!showSchedules && !showCalls && <section className="stats">{stats.map(({ label, value, note, icon: Icon, tone }) => <div className="stat" key={label}><div className={`stat-icon ${tone}`}><Icon size={20}/></div><div className="stat-label">{label}</div><strong>{value}</strong><small>{note}</small></div>)}</section>}
@@ -148,7 +119,7 @@ function Dashboard() {
         </tbody></table></div>
         <div className="table-foot"><span>Showing {filtered.length} of {calls.length} recent calls</span><span>Data refreshed just now</span></div>
       </section>}
-    </main>{newCallOpen && <NewCallDialog onClose={async () => setNewCallOpen(false)} onCreated={refreshDashboard} />}
+    </main>
   </div>;
 }
 

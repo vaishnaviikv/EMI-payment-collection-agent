@@ -4,15 +4,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import get_settings
-from app.gnani import TriggerResult
 
 get_settings.cache_clear()
 from app.main import app  # noqa: E402
-
-
-class FakeGnani:
-    async def trigger(self, call_id, payload):
-        return TriggerResult(f"mock-{call_id[:8]}", True)
 
 
 class FakeRepo:
@@ -21,12 +15,6 @@ class FakeRepo:
 
     async def create(self, doc):
         self.calls[doc["call_id"]] = doc
-
-    async def update_trigger(self, call_id, provider_call_id):
-        self.calls[call_id].update(status="triggered", provider_call_id=provider_call_id)
-
-    async def mark_trigger_failed(self, call_id, reason):
-        self.calls[call_id].update(status="trigger_failed")
 
     async def get(self, call_id):
         return self.calls.get(call_id)
@@ -51,7 +39,6 @@ class FakeRepo:
 def client():
     repo = FakeRepo()
     app.state.repo = repo
-    app.state.gnani = FakeGnani()
     with TestClient(app) as test_client:
         yield test_client, repo
 

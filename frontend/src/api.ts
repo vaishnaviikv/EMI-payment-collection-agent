@@ -19,25 +19,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
-export type NewCallPayload = {
-  customer_id: string;
-  customer_name: string;
-  phone: string;
-  language: "en" | "es";
-  emi_amount: number;
-  currency: string;
-  due_date: string;
-  loan_account: string;
-};
-
-export async function createCall(payload: NewCallPayload): Promise<{ call_id: string; status: string; message: string }> {
-  return request("/api/Initial_Message", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-}
-
 export async function getDashboard(): Promise<{ calls: Call[]; summary: Summary; demo: boolean }> {
   try {
     const [calls, summary] = await Promise.all([

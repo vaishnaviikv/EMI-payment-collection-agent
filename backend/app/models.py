@@ -11,10 +11,8 @@ class Language(StrEnum):
 
 
 class CallStatus(StrEnum):
-    pending = "pending"
     triggered = "triggered"
     completed = "completed"
-    trigger_failed = "trigger_failed"
 
 
 class InitialMessageRequest(BaseModel):
@@ -60,6 +58,7 @@ class CallCreated(BaseModel):
     status: CallStatus
     provider_call_id: str | None = None
     message: str
+    initial_message: str
 
 
 class CallView(BaseModel):

@@ -15,7 +15,6 @@ from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from .config import Settings, get_settings
-from .gnani import GnaniClient, GnaniError
 from .logging import configure_logging
 from .models import CallCreated, CallView, InitialMessageRequest, PostCallWebhook
 from .repository import CallRepository, utcnow
@@ -46,7 +45,6 @@ async def lifespan(app: FastAPI):
         app.state.mongo_client = client
         app.state.repo = CallRepository(client[settings.mongodb_database])
         await app.state.repo.ensure_indexes()
-    app.state.gnani = getattr(app.state, "gnani", GnaniClient(settings))
     yield
     if hasattr(app.state, "mongo_client"):
         app.state.mongo_client.close()
@@ -93,10 +91,6 @@ def repo(request: Request):
     return request.app.state.repo
 
 
-def gnani(request: Request):
-    return request.app.state.gnani
-
-
 @app.get("/health/live")
 async def live():
     return {"status": "ok"}
@@ -111,13 +105,20 @@ async def ready(repository=Depends(repo)):
     return {"status": "ready"}
 
 
-async def initiate_call(
-    payload: InitialMessageRequest,
-    repository: CallRepository,
-    client: GnaniClient,
-) -> CallCreated:
+def build_initial_message(payload: InitialMessageRequest) -> str:
+    last4 = payload.loan_account[-4:] if len(payload.loan_account) > 4 else payload.loan_account
+    due = payload.due_date.strftime("%d %B %Y")
+    return (
+        f"Hello {payload.customer_name}, I am calling regarding the EMI associated with your "
+        f"loan account ending in {last4}. Your EMI of {payload.emi_amount} {payload.currency} "
+        f"was due on {due}. May I confirm whether I am speaking with {payload.customer_name}?"
+    )
+
+
+async def initiate_call(payload: InitialMessageRequest, repository: CallRepository) -> CallCreated:
     call_id = str(uuid.uuid4())
     now = utcnow()
+    initial_message_text = build_initial_message(payload)
     document = {
         "call_id": call_id,
         "customer": {
@@ -132,8 +133,9 @@ async def initiate_call(
             "due_date": payload.due_date.isoformat(),
             "loan_account": payload.loan_account,
         },
-        "status": "pending",
+        "status": "triggered",
         "stage_code": "pending_call",
+        "provider_call_id": None,
         "webhook_ids": [],
         "transcript": [],
         "outcome": None,
@@ -142,31 +144,21 @@ async def initiate_call(
         "updated_at": now,
     }
     await repository.create(document)
-    try:
-        result = await client.trigger(call_id, payload.model_dump(mode="json"))
-        await repository.update_trigger(call_id, result.provider_call_id)
-        return CallCreated(
-            call_id=call_id,
-            status="triggered",
-            provider_call_id=result.provider_call_id,
-            message="Call queued in mock mode" if result.mocked else "Call queued with Gnani",
-        )
-    except GnaniError as exc:
-        await repository.mark_trigger_failed(call_id, str(exc))
-        logger.warning("gnani_trigger_failed", extra={"call_id": call_id})
-        raise HTTPException(
-            502,
-            {"code": "CALL_TRIGGER_FAILED", "message": "Call was saved, but the provider trigger failed", "call_id": call_id},
-        ) from exc
+    return CallCreated(
+        call_id=call_id,
+        status="triggered",
+        provider_call_id=None,
+        message="Call record stored; initial message ready for the Gnani agent",
+        initial_message=initial_message_text,
+    )
 
 
 @app.post("/api/Initial_Message", response_model=CallCreated, status_code=201)
 async def initial_message(
     payload: InitialMessageRequest,
     repository=Depends(repo),
-    client: GnaniClient = Depends(gnani),
 ):
-    return await initiate_call(payload, repository, client)
+    return await initiate_call(payload, repository)
 
 
 @app.post("/api/v1/webhooks/post-call")
