@@ -1,4 +1,4 @@
-import type { Call, Summary } from "./types";
+import type { Call, InitialCallRequest, InitialCallResponse, Summary } from "./types";
 import { demoCalls, demoSummary } from "./mockData";
 
 // Local Vite uses a same-origin proxy; deployed builds set VITE_API_URL to the public API URL.
@@ -33,4 +33,12 @@ export async function getDashboard(): Promise<{ calls: Call[]; summary: Summary;
 
 export async function getCall(callId: string): Promise<Call> {
   return request<Call>(`/api/calls/${encodeURIComponent(callId)}`);
+}
+
+export async function initiateTestCall(payload: InitialCallRequest): Promise<InitialCallResponse> {
+  return request<InitialCallResponse>("/api/Initial_Message", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }

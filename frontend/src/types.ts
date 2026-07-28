@@ -6,7 +6,7 @@ export type Call = {
   stage_code: string;
   provider_call_id?: string;
   transcript: { speaker: string; text: string; timestamp_ms?: number }[];
-  outcome?: { disposition?: string; summary?: string; sentiment?: string; duration_seconds?: number };
+  outcome?: { disposition?: string; disposition_reason?: string; summary?: string; duration_seconds?: number };
   raw_payload?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -18,3 +18,23 @@ export type Summary = {
   stages: Record<string, { count: number; amount: number }>;
 };
 
+export type InitialCallRequest = {
+  customer_id: string;
+  customer_name: string;
+  phone_number: string;
+  country_code: string;
+  loan_account_number: string;
+  emi_amount: number;
+  emi_due_date: string;
+  preferred_language: string;
+  currency: string;
+};
+
+export type InitialCallResponse = {
+  call_id: string;
+  provider_call_id?: string;
+  status: string;
+  message: string;
+  initial_message: string;
+  mocked: boolean;
+};

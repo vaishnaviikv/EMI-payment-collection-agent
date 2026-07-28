@@ -118,6 +118,12 @@ def build_initial_message(payload: InitialMessageRequest) -> str:
         )
     last4 = payload.loan_account[-4:] if len(payload.loan_account) > 4 else payload.loan_account
     due = payload.due_date.strftime("%d %B %Y")
+    if payload.language.value == "hi":
+        return (
+            f"नमस्ते {payload.customer_name}, मैं आपके ऋण खाते के अंतिम चार अंक {last4} से जुड़ी "
+            f"{payload.emi_amount} {payload.currency} की EMI के बारे में कॉल कर रही हूँ। "
+            f"क्या मैं {payload.customer_name} से बात कर रही हूँ?"
+        )
     return (
         f"Hello {payload.customer_name}, I am calling regarding the EMI associated with your "
         f"loan account ending in {last4}. Your EMI of {payload.emi_amount} {payload.currency} "
@@ -127,8 +133,10 @@ def build_initial_message(payload: InitialMessageRequest) -> str:
 
 async def initiate_call(payload: InitialMessageRequest, repository: CallRepository) -> CallCreated:
     call_id = payload.call_id or str(uuid.uuid4())
+    provider_call_id = payload.call_id or f"mock-{call_id[:12]}"
     now = utcnow()
     initial_message_text = build_initial_message(payload)
+    trigger_failed = payload.mock_trigger_result != "success"
     document = {
         "call_id": call_id,
         "customer": {
@@ -143,9 +151,9 @@ async def initiate_call(payload: InitialMessageRequest, repository: CallReposito
             "due_date": payload.due_date.isoformat(),
             "loan_account": payload.loan_account,
         },
-        "status": "triggered",
-        "stage_code": "pending_call",
-        "provider_call_id": payload.call_id,
+        "status": "trigger_failed" if trigger_failed else "triggered",
+        "stage_code": "trigger_failed" if trigger_failed else "pending_call",
+        "provider_call_id": None if trigger_failed else provider_call_id,
         "webhook_ids": [],
         "transcript": [],
         "outcome": None,
@@ -154,12 +162,23 @@ async def initiate_call(payload: InitialMessageRequest, repository: CallReposito
         "updated_at": now,
     }
     await repository.create_if_absent(document)
+    if payload.mock_trigger_result == "failure":
+        raise HTTPException(
+            502,
+            {"code": "GNANI_TRIGGER_FAILED", "message": "Mock Gnani trigger failed", "call_id": call_id},
+        )
+    if payload.mock_trigger_result == "timeout":
+        raise HTTPException(
+            504,
+            {"code": "GNANI_TRIGGER_TIMEOUT", "message": "Mock Gnani trigger timed out", "call_id": call_id},
+        )
     return CallCreated(
         call_id=call_id,
         status="triggered",
-        provider_call_id=payload.call_id,
-        message="Call record stored; initial message ready for the Gnani agent",
+        provider_call_id=provider_call_id,
+        message="Mock Gnani trigger accepted; call record stored",
         initial_message=initial_message_text,
+        mocked=settings.gnani_mock_mode,
     )
 
 

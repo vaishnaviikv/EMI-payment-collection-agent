@@ -127,6 +127,32 @@ def test_accepts_gnani_console_shape_and_preserves_call_id(client):
     assert repo.calls[call_id]["raw_payload"]["initial_message"]["flow_id"] == "prod-d91ed2ff1efd"
 
 
+def test_fde_request_creates_mock_trigger_with_normalized_fields(client):
+    http, repo = client
+    response = http.post(
+        "/api/Initial_Message",
+        json={
+            "customer_id": "1987",
+            "customer_name": "Viji Prasad",
+            "phone_number": "9176664629",
+            "country_code": "+1",
+            "loan_account_number": "LAN1987",
+            "emi_amount": 667,
+            "currency": "USD",
+            "emi_due_date": "2026-08-09",
+            "preferred_language": "English",
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["mocked"] is True
+    assert body["provider_call_id"].startswith("mock-")
+    row = repo.calls[body["call_id"]]
+    assert row["customer"]["phone"] == "+19176664629"
+    assert row["emi"]["loan_account"] == "LAN1987"
+    assert row["emi"]["due_date"] == "2026-08-09"
+
+
 def test_post_call_recovers_when_initial_message_was_not_stored(client):
     http, repo = client
     response = http.post(
@@ -137,3 +163,20 @@ def test_post_call_recovers_when_initial_message_was_not_stored(client):
     assert response.status_code == 200
     assert response.json()["status"] == "accepted"
     assert repo.calls["gnani-lost-call"]["status"] == "completed"
+
+
+@pytest.mark.parametrize(
+    ("result", "status_code", "error_code"),
+    [
+        ("failure", 502, "GNANI_TRIGGER_FAILED"),
+        ("timeout", 504, "GNANI_TRIGGER_TIMEOUT"),
+    ],
+)
+def test_mock_trigger_failure_is_stored(client, result, status_code, error_code):
+    http, repo = client
+    response = http.post("/api/Initial_Message", json={**PAYLOAD, "mock_trigger_result": result})
+    assert response.status_code == status_code
+    assert response.json()["error"]["code"] == error_code
+    call_id = response.json()["error"]["call_id"]
+    assert repo.calls[call_id]["status"] == "trigger_failed"
+    assert repo.calls[call_id]["stage_code"] == "trigger_failed"

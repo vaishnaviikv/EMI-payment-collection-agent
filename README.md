@@ -19,6 +19,12 @@ flowchart LR
 
 Calls are triggered manually inside the Gnani Agents Console (not from this app). The console calls this API's `Initial_Message` endpoint to fetch the dynamic greeting and register the call, then places the outbound call itself. See [docs/architecture.md](docs/architecture.md) for the full sequence.
 
+The FDE assignment's intended initiation flow differs from the dynamic-greeting
+callback observed in the console. See
+[docs/gnani-integration-findings.md](docs/gnani-integration-findings.md) for the
+captured payload, contract comparison, post-call-only tradeoffs, and recommended
+final architecture.
+
 ## Quick start
 
 Requirements: Docker 24+ and a MongoDB Atlas connection string. Atlas is the intended datastore; the Compose file deliberately does **not** start a local MongoDB.
@@ -46,6 +52,12 @@ npm run dev
 ```
 
 The dashboard uses `VITE_API_URL=http://localhost:8000` by default. `VITE_API_URL` is compiled into the frontend image; set it to the public API URL during a hosted build.
+
+For the FDE demo, the dashboard's **Create test call** action submits the complete
+customer/EMI form to `POST /api/Initial_Message`. With
+`GNANI_MOCK_MODE=true`, FastAPI validates and stores the call, returns a
+`mock-...` provider ID and generated greeting, but does not place a phone call.
+A post-call webhook can then complete the same record.
 
 ## API examples
 

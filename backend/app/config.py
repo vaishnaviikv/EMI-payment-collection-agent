@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     mongodb_uri: str = "mongodb://unused-in-tests"
     mongodb_database: str = "collectflow"
     webhook_api_key: str = "change-me"
+    gnani_mock_mode: bool = True
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
     gnani_disposition_map_json: str = (
         '{"PROMISE_TO_PAY":"promise_to_pay","PAID":"paid","CALL_BACK":"follow_up",'

@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -8,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 class Language(StrEnum):
     en = "en"
     es = "es"
+    hi = "hi"
 
 
 class CallStatus(StrEnum):
@@ -23,10 +25,11 @@ class InitialMessageRequest(BaseModel):
     customer_name: str = Field(default="Unknown customer", min_length=1, max_length=100)
     phone: str = Field(default="unknown", min_length=1, max_length=30)
     language: Language = Language.en
-    emi_amount: Decimal = Field(default=0, ge=0, max_digits=12, decimal_places=2)
+    emi_amount: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=2)
     currency: str = Field(default="USD", pattern=r"^[A-Z]{3}$")
     due_date: date = Field(default_factory=date.today)
     loan_account: str = Field(default="unknown", min_length=1, max_length=64)
+    mock_trigger_result: Literal["success", "failure", "timeout"] = "success"
 
     @model_validator(mode="before")
     @classmethod
@@ -48,7 +51,7 @@ class InitialMessageRequest(BaseModel):
             "language": ("LANGUAGE", "preferred_language"),
             "emi_amount": ("emiAmount", "EMI_AMOUNT", "amount", "due_amount"),
             "currency": ("CURRENCY",),
-            "due_date": ("dueDate", "DUE_DATE", "payment_due_date"),
+            "due_date": ("dueDate", "DUE_DATE", "payment_due_date", "emi_due_date"),
             "loan_account": ("loanAccount", "LOAN_ACCOUNT", "loan_account_number", "account_id"),
         }
         for target, candidates in aliases.items():
@@ -57,8 +60,17 @@ class InitialMessageRequest(BaseModel):
                     if flattened.get(candidate) not in (None, ""):
                         flattened[target] = flattened[candidate]
                         break
+        if not flattened.get("phone"):
+            phone_number = str(flattened.get("phone_number") or "").strip()
+            country_code = str(flattened.get("country_code") or "").strip()
+            if phone_number:
+                flattened["phone"] = f"{country_code}{phone_number}".replace(" ", "")
         language = str(flattened.get("language", "en")).lower()
-        flattened["language"] = "es" if language in {"es", "spanish", "español"} else "en"
+        flattened["language"] = (
+            "es" if language in {"es", "spanish", "español"}
+            else "hi" if language in {"hi", "hindi"}
+            else "en"
+        )
         flattened["currency"] = str(flattened.get("currency") or "USD").upper()
         return flattened
 
@@ -117,6 +129,7 @@ class CallCreated(BaseModel):
     provider_call_id: str | None = None
     message: str
     initial_message: str
+    mocked: bool = True
 
 
 class CallView(BaseModel):
