@@ -1,4 +1,4 @@
-# CollectFlow — EMI Payment Collection
+# EMI Flow — EMI Payment Collection
 
 A recruiter-demo quality, end-to-end EMI collection application. The React dashboard gives operations teams a clear view of automated collection calls; the FastAPI service accepts call requests, safely triggers Gnani (or mock mode), receives idempotent post-call webhooks, and stores results in MongoDB Atlas.
 
@@ -116,4 +116,3 @@ docker compose config
 ```
 
 Backend tests use an in-memory fake repository and never contact Atlas or Gnani.
-

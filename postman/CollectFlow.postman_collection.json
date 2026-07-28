@@ -1,5 +1,5 @@
 {
-  "info": {"name": "CollectFlow EMI API", "_postman_id": "5e7b2970-2d5a-4c67-a8a1-collectflowdemo", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+  "info": {"name": "EMI Flow API", "_postman_id": "5e7b2970-2d5a-4c67-a8a1-collectflowdemo", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
   "variable": [{"key": "baseUrl", "value": "http://localhost:8000"}, {"key": "webhookApiKey", "value": "change-me"}, {"key": "callId", "value": ""}],
   "item": [
     {"name": "Create call", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "url": "{{baseUrl}}/api/Initial_Message", "body": {"mode": "raw", "raw": "{\"customer_id\":\"CUS-1042\",\"customer_name\":\"Maya Rivera\",\"phone\":\"+14155550184\",\"language\":\"en\",\"emi_amount\":18450,\"currency\":\"INR\",\"due_date\":\"2026-08-05\",\"loan_account\":\"LN-84021\"}"}}},

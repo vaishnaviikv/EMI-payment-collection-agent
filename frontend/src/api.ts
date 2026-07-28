@@ -1,4 +1,5 @@
 import type { Call, Summary } from "./types";
+import { demoCalls, demoSummary } from "./mockData";
 
 // Local Vite uses a same-origin proxy; deployed builds set VITE_API_URL to the public API URL.
 const API_URL = import.meta.env.VITE_API_URL || "";
@@ -37,12 +38,16 @@ export async function createCall(payload: NewCallPayload): Promise<{ call_id: st
   });
 }
 
-export async function getDashboard(): Promise<{ calls: Call[]; summary: Summary }> {
-  const [calls, summary] = await Promise.all([
-    request<{ items: Call[] }>("/api/calls?limit=100"),
-    request<Summary>("/api/dashboard/summary"),
-  ]);
-  return { calls: calls.items, summary };
+export async function getDashboard(): Promise<{ calls: Call[]; summary: Summary; demo: boolean }> {
+  try {
+    const [calls, summary] = await Promise.all([
+      request<{ items: Call[] }>("/api/calls?limit=100"),
+      request<Summary>("/api/dashboard/summary"),
+    ]);
+    return { calls: calls.items, summary, demo: false };
+  } catch {
+    return { calls: demoCalls, summary: demoSummary, demo: true };
+  }
 }
 
 export async function getCall(callId: string): Promise<Call> {
