@@ -24,6 +24,14 @@ class CallRepository:
     async def create(self, document: dict):
         await self.collection.insert_one(document)
 
+    async def create_if_absent(self, document: dict):
+        result = await self.collection.update_one(
+            {"call_id": document["call_id"]},
+            {"$setOnInsert": document},
+            upsert=True,
+        )
+        return result.upserted_id is not None
+
     async def apply_webhook(self, call_id: str, delivery_id: str, update: dict):
         return await self.collection.find_one_and_update(
             {"call_id": call_id, "webhook_ids": {"$ne": delivery_id}},

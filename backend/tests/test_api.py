@@ -16,6 +16,12 @@ class FakeRepo:
     async def create(self, doc):
         self.calls[doc["call_id"]] = doc
 
+    async def create_if_absent(self, doc):
+        if doc["call_id"] in self.calls:
+            return False
+        self.calls[doc["call_id"]] = doc
+        return True
+
     async def get(self, call_id):
         return self.calls.get(call_id)
 
@@ -91,7 +97,43 @@ def test_webhook_is_idempotent(client):
 
 def test_rejects_bad_key_and_bad_phone(client):
     http, _ = client
-    invalid = http.post("/api/Initial_Message", json={**PAYLOAD, "phone": "555-0184"})
-    assert invalid.status_code == 422
     denied = http.post("/api/v1/webhooks/post-call", json={"call_id": "missing-call", "DISPOSITION": "PAID"})
     assert denied.status_code == 401
+
+
+def test_accepts_gnani_console_shape_and_preserves_call_id(client):
+    http, repo = client
+    response = http.post(
+        "/api/Initial_Message",
+        json={
+            "phone_number": "",
+            "flow_id": "prod-d91ed2ff1efd",
+            "call_id": "9b8a1885-efd3-4d9a-9fdc-367de019e116",
+            "is_initial": "False",
+            "organization_id": "common",
+            "environment": "production",
+            "user_id": "d726aa94-6acd-48f6-a530-465560b3bac7",
+            "mobile": "",
+            "sender_id": "9b8a1885-efd3-4d9a-9fdc-367de019e116",
+            "_id": "",
+        },
+    )
+    assert response.status_code == 201
+    call_id = "9b8a1885-efd3-4d9a-9fdc-367de019e116"
+    assert response.json()["call_id"] == call_id
+    assert "0 USD" not in response.json()["initial_message"]
+    assert repo.calls[call_id]["customer"]["customer_id"] == "d726aa94-6acd-48f6-a530-465560b3bac7"
+    assert repo.calls[call_id]["customer"]["phone"] == "unknown"
+    assert repo.calls[call_id]["raw_payload"]["initial_message"]["flow_id"] == "prod-d91ed2ff1efd"
+
+
+def test_post_call_recovers_when_initial_message_was_not_stored(client):
+    http, repo = client
+    response = http.post(
+        "/api/v1/webhooks/post-call",
+        headers=webhook_headers("recovery-event"),
+        json={"callId": "gnani-lost-call", "disposition": "PAID"},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "accepted"
+    assert repo.calls["gnani-lost-call"]["status"] == "completed"

@@ -76,9 +76,11 @@ The Postman collection in `postman/CollectFlow.postman_collection.json` contains
 Calls are triggered manually inside the **Gnani Agents Console**, not by this application. The flow is:
 
 1. An operator opens the Gnani Agents Console and starts a call, entering the customer/EMI fields (customer name, customer ID, loan account, EMI amount, due date, preferred language) and a whitelisted phone number.
-2. The console calls this API's `POST /api/Initial_Message` with those fields. The endpoint stores the call record (`status: "triggered"`) in MongoDB and returns a dynamically generated `initial_message` greeting for the console to use as the bot's opening line.
+2. The console calls this API's `POST /api/Initial_Message`. The endpoint accepts either the full EMI fields shown in the API example or Gnani's session-only payload (`call_id`, `flow_id`, `user_id`, etc.), stores the call record (`status: "triggered"`) in MongoDB, and returns an `initial_message`. The Gnani `call_id` is retained so the post-call webhook updates the same record. When EMI fields are absent, the record and greeting use safe placeholders rather than rejecting the call.
 3. The console places the outbound call and conducts the conversation using Prisma ASR, Timbre 2.5 TTS, and Evon LLM.
 4. When the call ends, the console (or its backend) posts the outcome to `POST /api/v1/webhooks/post-call`, which stores the disposition, transcript, and analytics, and is idempotent against duplicate deliveries.
+
+If an authenticated post-call event arrives for a call that has no initial record (for example, an older deployment rejected the initial payload), the backend creates a recovery record and applies the result. This preserves the call in MongoDB and the dashboard, but fields Gnani never sent remain `unknown`/`0`; real customer and EMI values must be included by Gnani or resolved from another data source using `user_id`.
 
 **For this to work when deployed, the console needs a publicly reachable URL for step 2** — e.g. your Render backend's `https://<your-backend>.onrender.com/api/Initial_Message` — configured in the console as the agent's "Initial Message" endpoint. Ask your Gnani contact for the exact field name and request/response contract they expect, since this is registered per-agent in the console rather than via an env var here.
 

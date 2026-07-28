@@ -111,6 +111,11 @@ async def ready(repository=Depends(repo)):
 
 
 def build_initial_message(payload: InitialMessageRequest) -> str:
+    if payload.customer_name == "Unknown customer" or payload.loan_account == "unknown" or payload.emi_amount == 0:
+        return (
+            "Hello, this is a call regarding your loan account. "
+            "May I confirm that I am speaking with the account holder?"
+        )
     last4 = payload.loan_account[-4:] if len(payload.loan_account) > 4 else payload.loan_account
     due = payload.due_date.strftime("%d %B %Y")
     return (
@@ -121,7 +126,7 @@ def build_initial_message(payload: InitialMessageRequest) -> str:
 
 
 async def initiate_call(payload: InitialMessageRequest, repository: CallRepository) -> CallCreated:
-    call_id = str(uuid.uuid4())
+    call_id = payload.call_id or str(uuid.uuid4())
     now = utcnow()
     initial_message_text = build_initial_message(payload)
     document = {
@@ -140,19 +145,19 @@ async def initiate_call(payload: InitialMessageRequest, repository: CallReposito
         },
         "status": "triggered",
         "stage_code": "pending_call",
-        "provider_call_id": None,
+        "provider_call_id": payload.call_id,
         "webhook_ids": [],
         "transcript": [],
         "outcome": None,
-        "raw_payload": None,
+        "raw_payload": {"initial_message": payload.model_dump(mode="json")},
         "created_at": now,
         "updated_at": now,
     }
-    await repository.create(document)
+    await repository.create_if_absent(document)
     return CallCreated(
         call_id=call_id,
         status="triggered",
-        provider_call_id=None,
+        provider_call_id=payload.call_id,
         message="Call record stored; initial message ready for the Gnani agent",
         initial_message=initial_message_text,
     )
@@ -180,7 +185,35 @@ async def post_call(
     delivery_id = x_webhook_id or hashlib.sha256(json.dumps(raw, sort_keys=True).encode()).hexdigest()
     existing = await repository.get(payload.call_id)
     if not existing:
-        raise HTTPException(404, {"code": "CALL_NOT_FOUND", "message": "No matching call record"})
+        now = utcnow()
+        await repository.create_if_absent(
+            {
+                "call_id": payload.call_id,
+                "customer": {
+                    "customer_id": "unknown",
+                    "name": "Unknown customer",
+                    "phone": "unknown",
+                    "language": "en",
+                },
+                "emi": {
+                    "amount": Decimal128("0"),
+                    "currency": "USD",
+                    "due_date": now.date().isoformat(),
+                    "loan_account": "unknown",
+                },
+                "status": "triggered",
+                "stage_code": "pending_call",
+                "provider_call_id": payload.provider_call_id or payload.call_id,
+                "webhook_ids": [],
+                "transcript": [],
+                "outcome": None,
+                "raw_payload": {"recovered_from": "post_call"},
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+        existing = await repository.get(payload.call_id)
+        logger.warning("post_call_recovered_missing_call", extra={"call_id": payload.call_id})
     if delivery_id in existing.get("webhook_ids", []):
         return {"status": "duplicate", "call_id": payload.call_id}
     disposition = payload.DISPOSITION.strip().upper()

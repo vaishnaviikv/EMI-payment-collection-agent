@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class Language(StrEnum):
@@ -16,14 +16,51 @@ class CallStatus(StrEnum):
 
 
 class InitialMessageRequest(BaseModel):
-    customer_id: str = Field(min_length=2, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
-    customer_name: str = Field(min_length=2, max_length=100)
-    phone: str = Field(pattern=r"^\+[1-9]\d{7,14}$")
+    model_config = ConfigDict(extra="allow")
+
+    call_id: str | None = Field(default=None, min_length=1, max_length=200)
+    customer_id: str = Field(default="unknown", min_length=1, max_length=64)
+    customer_name: str = Field(default="Unknown customer", min_length=1, max_length=100)
+    phone: str = Field(default="unknown", min_length=1, max_length=30)
     language: Language = Language.en
-    emi_amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    emi_amount: Decimal = Field(default=0, ge=0, max_digits=12, decimal_places=2)
     currency: str = Field(default="USD", pattern=r"^[A-Z]{3}$")
-    due_date: date
-    loan_account: str = Field(min_length=3, max_length=64)
+    due_date: date = Field(default_factory=date.today)
+    loan_account: str = Field(default="unknown", min_length=1, max_length=64)
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_gnani_fields(cls, value):
+        if not isinstance(value, dict):
+            return value
+        # Gnani agent configurations commonly put console variables under one
+        # of these containers and may use camelCase or upper-case field names.
+        flattened = dict(value)
+        for container in ("data", "variables", "metadata", "custom_data"):
+            nested = value.get(container)
+            if isinstance(nested, dict):
+                flattened = {**nested, **flattened}
+        aliases = {
+            "call_id": ("callId", "CALL_ID", "call_uuid", "session_id", "conversation_id"),
+            "customer_id": ("customerId", "CUSTOMER_ID", "user_id"),
+            "customer_name": ("customerName", "CUSTOMER_NAME", "name", "customer"),
+            "phone": ("phoneNumber", "phone_number", "mobile", "mobile_number", "to"),
+            "language": ("LANGUAGE", "preferred_language"),
+            "emi_amount": ("emiAmount", "EMI_AMOUNT", "amount", "due_amount"),
+            "currency": ("CURRENCY",),
+            "due_date": ("dueDate", "DUE_DATE", "payment_due_date"),
+            "loan_account": ("loanAccount", "LOAN_ACCOUNT", "loan_account_number", "account_id"),
+        }
+        for target, candidates in aliases.items():
+            if flattened.get(target) in (None, ""):
+                for candidate in candidates:
+                    if flattened.get(candidate) not in (None, ""):
+                        flattened[target] = flattened[candidate]
+                        break
+        language = str(flattened.get("language", "en")).lower()
+        flattened["language"] = "es" if language in {"es", "spanish", "español"} else "en"
+        flattened["currency"] = str(flattened.get("currency") or "USD").upper()
+        return flattened
 
     @field_validator("customer_name", "loan_account")
     @classmethod
@@ -46,11 +83,32 @@ class Analytics(BaseModel):
 
 class PostCallWebhook(BaseModel):
     model_config = ConfigDict(extra="allow")
-    call_id: str = Field(min_length=8, max_length=100)
+    call_id: str = Field(min_length=1, max_length=200)
     DISPOSITION: str = Field(min_length=1, max_length=100)
     transcript: list[TranscriptTurn] = Field(default_factory=list, max_length=500)
     analytics: Analytics = Field(default_factory=Analytics)
     provider_call_id: str | None = Field(default=None, max_length=200)
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_gnani_fields(cls, value):
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        if not normalized.get("call_id"):
+            normalized["call_id"] = next(
+                (
+                    normalized[key]
+                    for key in ("callId", "CALL_ID", "call_uuid", "session_id", "conversation_id", "provider_call_id")
+                    if normalized.get(key)
+                ),
+                None,
+            )
+        if not normalized.get("DISPOSITION"):
+            normalized["DISPOSITION"] = normalized.get("disposition") or normalized.get("outcome")
+        if "transcript" not in normalized and "call_transcript" in normalized:
+            normalized["transcript"] = normalized["call_transcript"]
+        return normalized
 
 
 class CallCreated(BaseModel):
