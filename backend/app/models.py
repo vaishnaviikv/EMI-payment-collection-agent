@@ -60,11 +60,12 @@ class InitialMessageRequest(BaseModel):
                     if flattened.get(candidate) not in (None, ""):
                         flattened[target] = flattened[candidate]
                         break
-        if not flattened.get("phone"):
-            phone_number = str(flattened.get("phone_number") or "").strip()
-            country_code = str(flattened.get("country_code") or "").strip()
-            if phone_number:
-                flattened["phone"] = f"{country_code}{phone_number}".replace(" ", "")
+        phone_number = str(flattened.get("phone_number") or "").strip()
+        country_code = str(flattened.get("country_code") or "").strip()
+        if phone_number and country_code and not value.get("phone"):
+            flattened["phone"] = f"{country_code}{phone_number}".replace(" ", "")
+        elif not flattened.get("phone") and phone_number:
+            flattened["phone"] = phone_number.replace(" ", "")
         language = str(flattened.get("language", "en")).lower()
         flattened["language"] = (
             "es" if language in {"es", "spanish", "español"}
